@@ -13,21 +13,22 @@ Parsers covered:
 - **Mistral OCR** (`mistral-ocr-latest`)
 - **Reducto** — default and agentic-enhancement modes
 
-## Verdict (July 2026)
+## Verdict (July 2026, full bake-off)
 
-| Parser | Speed/doc | Printed English | Devanagari | Handwriting |
-|---|---|---|---|---|
-| LiteParse 2.5.0 (local) | ~1–2s | garbled on aged scans | garbage | **missed entirely** |
-| LlamaParse default | ~10–25s | clean | mostly dropped | half-caught, garbled |
-| LlamaParse premium | ~14–21s | clean | **fully transcribed** | **all annotations, tagged** |
+| Parser | Score | Notes |
+|---|---|---|
+| **Gemini Flash** | **8.5–9/10** | Quality winner. The only parser to transcribe the cursive annotations correctly, and it caught a likely transcription error in LlamaParse premium's output. |
+| LlamaParse premium | 8.5/10 | Full Devanagari, all handwriting tagged `[handwriting: ...]`, stamps, signatures. Several times more credits/page than default. |
+| LlamaParse agentic | 8/10 | Right words, but strikethrough/correction rendering comes out unanchored. |
+| Mistral OCR | 7.5/10 | Cheap-tier winner: ~$0.001/page, 3–5s, near-premium bilingual Devanagari. Handwriting garbled. |
+| Reducto (default = agentic) | 6.5/10 | Agentic mode made Devanagari *worse* and describes signatures in prose instead of transcribing. |
+| LlamaParse default | 6/10 | Clean typed English, but drops ALL Hindi silently. |
+| LiteParse 2.5.0 (local) | 2/10 | Corrupts even typed dates; misses handwriting entirely. Not viable for aged scans (its own README says so; confirmed empirically). |
 
-- LiteParse is not viable for aged handwritten legal documents (its own README
-  recommends LlamaParse for handwriting/scans; confirmed empirically here).
-- LlamaParse premium read cursive annotations, rubber-stamp dates, signature
-  blocks, and full Devanagari.
-- Premium costs several times more credits per page. The sensible production
-  pipeline: triage with `lit is-complex` or LlamaParse default, escalate
-  handwritten pages to premium.
+Recommended pipeline: **Mistral OCR as the cheap tier, escalate to Gemini Flash**
+(with retry + model fallback — Flash 503s on very large PDFs) for handwritten or
+low-confidence pages. LlamaParse premium if you want turnkey instead of
+prompt-managed.
 
 ## Layout
 
