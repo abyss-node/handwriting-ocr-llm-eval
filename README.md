@@ -10,6 +10,12 @@ Contenders: [run-llama/liteparse](https://github.com/run-llama/liteparse)
 (local Tesseract), LlamaParse (default / premium / agentic), Gemini direct API,
 Mistral OCR, Reducto (default / agentic).
 
+> **Note:** this is a sanitized public mirror of a private evaluation repo.
+> The source documents were client-provided, so they, all parser outputs
+> derived from them, and document-content specifics in this README are
+> excluded. The harness, methodology, scores, and the public-dataset
+> benchmark replication are complete.
+
 ## Verdict (July 2026 bake-off)
 
 | Parser | Score | Speed/doc | ~$/page | Notes |
