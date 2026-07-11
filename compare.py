@@ -49,12 +49,18 @@ def run_liteparse(doc: Path, out_dir: Path) -> dict:
     }
 
 
-def run_llamaparse(doc: Path, out_dir: Path, premium: bool, agentic: bool = False) -> dict:
+def run_llamaparse(doc: Path, out_dir: Path, premium: bool, agentic: bool = False,
+                   prompted: bool = False) -> dict:
     from llama_cloud_services import LlamaParse
 
-    tier = "-agentic" if agentic else ("-premium" if premium else "")
+    tier = ("-prompted" if prompted else
+            "-agentic" if agentic else
+            "-premium" if premium else "")
     out_file = out_dir / f"llamaparse{tier}.md"
-    if agentic:
+    if prompted:
+        parser = LlamaParse(result_type="markdown", premium_mode=True,
+                            system_prompt_append=GEMINI_PROMPT, verbose=False)
+    elif agentic:
         parser = LlamaParse(result_type="markdown", parse_mode="parse_page_with_agent",
                             verbose=False)
     else:
@@ -206,6 +212,8 @@ def main():
                     help="Reducto with agentic enhancement on all scopes (costs more)")
     ap.add_argument("--llama-agentic", action="store_true",
                     help="LlamaParse top agentic mode, parse_page_with_agent (costs more)")
+    ap.add_argument("--llama-prompted", action="store_true",
+                    help="LlamaParse premium with the Gemini transcription prompt appended")
     args = ap.parse_args()
 
     for flag, key in (("gemini", "GEMINI_API_KEY"), ("mistral", "MISTRAL_API_KEY"),
@@ -261,6 +269,11 @@ def main():
             r = run_llamaparse(doc, out_dir, premium=False, agentic=True)
             rows.append((doc.name, r))
             print(f"  llamaparse-agentic: {'OK' if r['ok'] else 'FAIL'} {r['seconds']}s {r['chars']} chars {r['error'][:200]}")
+
+        if args.llama_prompted:
+            r = run_llamaparse(doc, out_dir, premium=True, prompted=True)
+            rows.append((doc.name, r))
+            print(f"  llamaparse-prompted: {'OK' if r['ok'] else 'FAIL'} {r['seconds']}s {r['chars']} chars {r['error'][:200]}")
 
     summary = RESULTS / "summary-runs.md"
     lines = ["", f"## run: {time.strftime('%Y-%m-%d %H:%M')}", "",
