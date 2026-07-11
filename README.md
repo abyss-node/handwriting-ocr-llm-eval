@@ -16,6 +16,21 @@ Mistral OCR, Reducto (default / agentic).
 > excluded. The harness, methodology, scores, and the public-dataset
 > benchmark replication are complete.
 
+## Bottom line
+
+**Two-tier pipeline: `gemini-3.1-flash-lite` on everything → escalate to full Gemini
+Flash (or LlamaParse premium for turnkey) on any page where the cheap tier emits a
+`[handwriting: ...]` tag.** The original question — "build an image classifier to
+decide when premium kicks in?" — answered itself: no classifier needed. The cheap
+tier reliably *tags* handwriting regions even when it misreads them; the tag is the
+escalation trigger.
+
+| Pipeline | ~Cost / 1000 pages | Notes |
+|---|---|---|
+| LlamaParse premium on everything | ~$45 | Turnkey, zero plumbing |
+| Flash-lite + Gemini Flash escalation (~30% pages) | ~$2 | Needs retry/fallback plumbing (in `compare.py`) + a billed Gemini key |
+| Ensemble: flash-lite + Mistral on every page | ~$2–3 | Disagreements flagged for human review — proposed next step |
+
 ## Verdict (July 2026 bake-off)
 
 | Parser | Score | Speed/doc | ~$/page | Notes |
