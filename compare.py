@@ -82,6 +82,9 @@ def run_llamaparse(doc: Path, out_dir: Path, premium: bool, agentic: bool = Fals
         }
 
 
+MIME = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg", ".webp": "image/webp"}
+
 GEMINI_PROMPT = """Transcribe this scanned document to markdown, completely and faithfully.
 - Transcribe ALL text: typed, printed, and handwritten. Do not summarize or skip anything.
 - Tag handwritten text as [handwriting: ...], stamps as [stamp: ...], signatures as [signature: ...].
@@ -101,7 +104,7 @@ def run_gemini(doc: Path, out_dir: Path) -> dict:
                 f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                 headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
                 json={"contents": [{"parts": [
-                    {"inline_data": {"mime_type": "application/pdf",
+                    {"inline_data": {"mime_type": MIME[doc.suffix.lower()],
                                      "data": base64.b64encode(doc.read_bytes()).decode()}},
                     {"text": GEMINI_PROMPT},
                 ]}]},
@@ -135,9 +138,14 @@ def run_mistral(doc: Path, out_dir: Path) -> dict:
             "https://api.mistral.ai/v1/ocr",
             headers={"Authorization": f"Bearer {os.environ['MISTRAL_API_KEY']}"},
             json={"model": "mistral-ocr-latest",
-                  "document": {"type": "document_url",
-                               "document_url": "data:application/pdf;base64,"
-                                               + base64.b64encode(doc.read_bytes()).decode()}},
+                  "document": (
+                      {"type": "image_url",
+                       "image_url": f"data:{MIME[doc.suffix.lower()]};base64,"
+                                    + base64.b64encode(doc.read_bytes()).decode()}
+                      if doc.suffix.lower() != ".pdf" else
+                      {"type": "document_url",
+                       "document_url": "data:application/pdf;base64,"
+                                       + base64.b64encode(doc.read_bytes()).decode()})},
             timeout=600,
         )
         resp.raise_for_status()
@@ -254,12 +262,14 @@ def main():
             rows.append((doc.name, r))
             print(f"  llamaparse-agentic: {'OK' if r['ok'] else 'FAIL'} {r['seconds']}s {r['chars']} chars {r['error'][:200]}")
 
-    summary = RESULTS / "summary.md"
-    lines = ["| document | parser | ok | seconds | chars |", "|---|---|---|---|---|"]
+    summary = RESULTS / "summary-runs.md"
+    lines = ["", f"## run: {time.strftime('%Y-%m-%d %H:%M')}", "",
+             "| document | parser | ok | seconds | chars |", "|---|---|---|---|---|"]
     lines += [f"| {name} | {r['parser']} | {'yes' if r['ok'] else 'NO: ' + r['error'][:80]} | {r['seconds']} | {r['chars']} |"
               for name, r in rows]
-    summary.write_text("\n".join(lines), encoding="utf-8")
-    print(f"\nSummary written to {summary}")
+    with summary.open("a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+    print(f"\nSummary appended to {summary}")
 
 
 if __name__ == "__main__":

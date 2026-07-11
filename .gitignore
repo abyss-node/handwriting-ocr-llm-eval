@@ -3,4 +3,6 @@
 results/
 docs/
 shots/
+bench/
+pro-probe.log
 __pycache__/
