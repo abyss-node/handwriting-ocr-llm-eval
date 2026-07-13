@@ -251,7 +251,43 @@ across the two passes, so a row-level cross-script numeral diff flags exactly
 one field: the one every combined parse got wrong. Cost: two extra cheap-tier
 calls per bilingual document. This is the first mechanism in the harness that
 catches the agreed-upon-error class, and it generalizes to any document with
-redundant fields (bilingual rows, totals, repeated reference numbers).
+redundant fields (bilingual rows, totals, repeated reference numbers). The
+diff is automatic: ordered numeral sequences from the two passes are
+sequence-aligned (compound numerals like dates kept whole) and REPLACE ops
+become flags in `results/<doc>/cross-script-report.md`, source lines inline.
+On the bilingual form: 7 numerals agree, 2 flags — the true smudged-field
+disagreement plus one alignment artifact the inline context makes instantly
+dismissible. Precision is not 100%; flags are for a human glance, and the
+report says which script's ink to prefer.
+
+**Setup scorecard — every setup vs the five human-read fields.** Scoring rule:
+for each validated field a setup either outputs a value (right, or **silently
+wrong** — the poison) or routes it to a human (**safely flagged**).
+Eyeball-grade truth, n=5, one corpus — directional, not statistical.
+
+| Setup | Right | Silently wrong | Safely flagged |
+|---|---|---|---|
+| flash-lite alone (cheap tier) | 0/5 | 5/5 | 0 |
+| Mistral OCR alone | 0/5 | 5/5 | 0 |
+| Full Gemini Flash alone (escalation tier) | 1/5 | 4/5 | 0 |
+| LlamaParse premium alone (turnkey tier) | 1/5 | 4/5 | 0 |
+| Ensemble V1.1 flagging (2 cheap parsers) | — | 1/5 | 4/5 |
+| + merge, pre-validation policy | 0 | 2/5 (1 visibly flagged) | 3/5 |
+| + merge, handwriting-never-silent policy | — | 1/5 | 4/5 |
+| **+ cross-script witness (full pipeline)** | — | **0/5** | **5/5** |
+
+No single parser is usable unattended — the two strongest each get one field
+right and are silently wrong on four, and it's a *different* field each, so
+there is no "just pick the best parser" answer. Each pipeline layer removes a
+specific failure class: two-parser disagreement flagging catches the
+uncorrelated errors, the handwriting-never-silent policy removes the bad
+plurality adoption, and the cross-script witness catches the prior-correlated
+error the ensemble is structurally blind to. Cross-script's false-positive
+cost, measured: one dismissible flag on the bilingual doc, zero on the four
+English-dominant docs (the Devanagari-only pass returns no numerals there, so
+the witness self-disables). Full-pipeline cost ≈ 4 flash-lite + 1 Mistral
+call (~$0.005/doc) plus flagged-only escalation — ~10× cheaper than premium
+on everything, with strictly better silent-error behavior.
 
 **Registry reconciliation (researched):** for registry-issued fields the
 authoritative move is a lookup, not a better parse. Verdict: IP India has no

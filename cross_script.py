@@ -11,12 +11,17 @@ numerals across the two passes flags exactly this failure class, and only it.
 Usage:
     python cross_script.py <file1> [file2 ...]
 
-Writes results/<doc>/gemini-deva-only.md and gemini-english-only.md, then prints
-a numeral-level diff of the two passes (digits normalized, Devanagari digits
-folded to ASCII).
+Writes results/<doc>/gemini-deva-only.md and gemini-english-only.md, aligns the
+ordered numeral sequences of the two passes (Devanagari digits folded to ASCII,
+compound numerals like dates kept whole), and writes a cross-script report:
+REPLACE ops — both scripts carry a numeral at the same aligned position but
+disagree — are the high-signal flags (the failure class this witness exists
+for); numerals present in only one script are listed as low-signal context
+(bilingual forms have plenty of single-script content).
 """
 
 import base64
+import difflib
 import re
 import sys
 import time
@@ -79,13 +84,73 @@ def call_gemini(doc: Path, prompt: str, out_file: Path) -> str:
     return text
 
 
-def numbered_lines(text: str) -> list:
-    """Lines that contain a numeral, with Devanagari digits folded to ASCII."""
-    out = []
+NUMERAL_RE = re.compile(r"\d+(?:[./-]\d+)*")   # 7, 1/2/03, 3.4.05, TM-38 -> 38
+
+
+def numerals(text: str) -> list:
+    """Ordered (numeral, source line) pairs; Devanagari digits folded to ASCII,
+    compound numerals (dates, fractions) kept as one token."""
+    items = []
     for line in text.translate(DEVA_DIGITS).splitlines():
-        if re.search(r"\d", line):
-            out.append(line.strip())
-    return out
+        for m in NUMERAL_RE.finditer(line):
+            items.append((m.group(0), line.strip()))
+    return items
+
+
+def diff_passes(deva: str, eng: str) -> dict:
+    """Align the two numeral sequences; REPLACE ops are cross-script disagreements."""
+    d_items, e_items = numerals(deva), numerals(eng)
+    sm = difflib.SequenceMatcher(a=[n for n, _ in d_items],
+                                 b=[n for n, _ in e_items], autojunk=False)
+    disagreements, deva_only, eng_only, agree = [], [], [], 0
+    for op, a_lo, a_hi, b_lo, b_hi in sm.get_opcodes():
+        if op == "equal":
+            agree += a_hi - a_lo
+        elif op == "replace":
+            disagreements.append({"deva": d_items[a_lo:a_hi], "eng": e_items[b_lo:b_hi]})
+        elif op == "delete":
+            deva_only += d_items[a_lo:a_hi]
+        else:
+            eng_only += e_items[b_lo:b_hi]
+    return {"agree": agree, "disagreements": disagreements,
+            "deva_only": deva_only, "eng_only": eng_only,
+            "d_total": len(d_items), "e_total": len(e_items)}
+
+
+def write_report(doc_name: str, res: dict, out_dir: Path):
+    lines = [
+        f"# Cross-script report — {doc_name}",
+        "",
+        f"Passes: `gemini-deva-only.md` vs `gemini-english-only.md` · model {MODEL}",
+        f"**{res['agree']} numerals agree across scripts · "
+        f"{len(res['disagreements'])} cross-script DISAGREEMENT(s) · "
+        f"{len(res['deva_only'])} Devanagari-only · {len(res['eng_only'])} English-only**",
+        "",
+    ]
+    if res["disagreements"]:
+        lines += ["## Cross-script disagreements (high signal — neither reading trusted)",
+                  "",
+                  "| Devanagari pass | English pass |",
+                  "|---|---|"]
+        for d in res["disagreements"]:
+            dv = "<br>".join(f"**{n}** — {l}" for n, l in d["deva"]) or "∅"
+            en = "<br>".join(f"**{n}** — {l}" for n, l in d["eng"]) or "∅"
+            lines.append(f"| {dv} | {en} |")
+        lines.append("")
+    else:
+        lines += ["No cross-script disagreements.", ""]
+    for label, key in (("Devanagari-only numerals (low signal)", "deva_only"),
+                       ("English-only numerals (low signal)", "eng_only")):
+        if res[key]:
+            lines += [f"## {label}", ""]
+            lines += [f"- {n} — {l}" for n, l in res[key]]
+            lines.append("")
+    lines += ["*A cross-script disagreement means the two scripts of the same "
+              "document carry different numbers at the same position — exactly the "
+              "class where combined parses harmonize to a shared (often wrong) "
+              "reading. Resolve by eye, preferring whichever script's ink is "
+              "legible.*"]
+    (out_dir / "cross-script-report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main():
@@ -101,12 +166,15 @@ def main():
             call_gemini(doc, DEVA_PROMPT, deva_f)
         eng = eng_f.read_text(encoding="utf-8") if eng_f.exists() else \
             call_gemini(doc, ENG_PROMPT, eng_f)
-        print("-- Devanagari-only pass, lines containing numerals:")
-        for l in numbered_lines(deva):
-            print(f"   {l}")
-        print("-- English-only pass, lines containing numerals:")
-        for l in numbered_lines(eng):
-            print(f"   {l}")
+        res = diff_passes(deva, eng)
+        write_report(doc.name, res, out_dir)
+        print(f"   {res['agree']} agree · {len(res['disagreements'])} DISAGREE · "
+              f"{len(res['deva_only'])} deva-only · {len(res['eng_only'])} eng-only "
+              f"-> cross-script-report.md")
+        for d in res["disagreements"]:
+            dv = ", ".join(n for n, _ in d["deva"]) or "∅"
+            en = ", ".join(n for n, _ in d["eng"]) or "∅"
+            print(f"     !! deva [{dv}]  vs  eng [{en}]")
 
 
 if __name__ == "__main__":
